@@ -32,7 +32,7 @@ pub extern "C" fn glean_new_ping_type(
 }
 
 #[no_mangle]
-pub extern "C" fn glean_test_has_ping_type(glean_handle: u64, ping_name: FfiStr) -> u8 {
+pub extern "C" fn glean_test_has_ping_type(ping_name: FfiStr) -> u8 {
     glean_core::global_glean()
         .lock()
         .unwrap()
@@ -41,7 +41,7 @@ pub extern "C" fn glean_test_has_ping_type(glean_handle: u64, ping_name: FfiStr)
 }
 
 #[no_mangle]
-pub extern "C" fn glean_register_ping_type(glean_handle: u64, ping_type_handle: u64) {
+pub extern "C" fn glean_register_ping_type(ping_type_handle: u64) {
     PING_TYPES.call_infallible(ping_type_handle, |ping_type| {
         let mut glean = glean_core::global_glean().lock().unwrap();
         glean.register_ping_type(ping_type)

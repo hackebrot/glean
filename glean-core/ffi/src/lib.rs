@@ -217,28 +217,24 @@ pub unsafe extern "C" fn glean_initialize_migration(
 }
 
 #[no_mangle]
-pub extern "C" fn glean_on_ready_to_send_pings(glean_handle: u64) -> u8 {
+pub extern "C" fn glean_on_ready_to_send_pings() -> u8 {
     with_glean_value(|glean| glean.on_ready_to_send_pings())
 }
 
 #[no_mangle]
-pub extern "C" fn glean_is_upload_enabled(glean_handle: u64) -> u8 {
+pub extern "C" fn glean_is_upload_enabled() -> u8 {
     with_glean_value(|glean| glean.is_upload_enabled())
 }
 
 #[no_mangle]
-pub extern "C" fn glean_set_upload_enabled(glean_handle: u64, flag: u8) {
+pub extern "C" fn glean_set_upload_enabled(flag: u8) {
     with_glean_value_mut(|glean| glean.set_upload_enabled(flag != 0));
     // The return value of set_upload_enabled is an implementation detail
     // that isn't exposed over FFI.
 }
 
 #[no_mangle]
-pub extern "C" fn glean_send_pings_by_name(
-    glean_handle: u64,
-    ping_names: RawStringArray,
-    ping_names_len: i32,
-) -> u8 {
+pub extern "C" fn glean_send_pings_by_name(ping_names: RawStringArray, ping_names_len: i32) -> u8 {
     with_glean(|glean| {
         let pings = from_raw_string_array(ping_names, ping_names_len)?;
         Ok(glean.send_pings_by_name(&pings))
@@ -246,7 +242,7 @@ pub extern "C" fn glean_send_pings_by_name(
 }
 
 #[no_mangle]
-pub extern "C" fn glean_ping_collect(glean_handle: u64, ping_type_handle: u64) -> *mut c_char {
+pub extern "C" fn glean_ping_collect(ping_type_handle: u64) -> *mut c_char {
     with_glean_value(|glean| {
         PING_TYPES.call_infallible(ping_type_handle, |ping_type| {
             let ping_maker = glean_core::ping::PingMaker::new();
@@ -261,7 +257,6 @@ pub extern "C" fn glean_ping_collect(glean_handle: u64, ping_type_handle: u64) -
 
 #[no_mangle]
 pub extern "C" fn glean_set_experiment_active(
-    glean_handle: u64,
     experiment_id: FfiStr,
     branch: FfiStr,
     extra_keys: RawStringArray,
@@ -279,7 +274,7 @@ pub extern "C" fn glean_set_experiment_active(
 }
 
 #[no_mangle]
-pub extern "C" fn glean_set_experiment_inactive(glean_handle: u64, experiment_id: FfiStr) {
+pub extern "C" fn glean_set_experiment_inactive(experiment_id: FfiStr) {
     with_glean(|glean| {
         let experiment_id = experiment_id.to_string_fallible()?;
         glean.set_experiment_inactive(experiment_id);
@@ -288,7 +283,7 @@ pub extern "C" fn glean_set_experiment_inactive(glean_handle: u64, experiment_id
 }
 
 #[no_mangle]
-pub extern "C" fn glean_experiment_test_is_active(glean_handle: u64, experiment_id: FfiStr) -> u8 {
+pub extern "C" fn glean_experiment_test_is_active(experiment_id: FfiStr) -> u8 {
     with_glean(|glean| {
         let experiment_id = experiment_id.to_string_fallible()?;
         Ok(glean.test_is_experiment_active(experiment_id))
@@ -296,10 +291,7 @@ pub extern "C" fn glean_experiment_test_is_active(glean_handle: u64, experiment_
 }
 
 #[no_mangle]
-pub extern "C" fn glean_experiment_test_get_data(
-    glean_handle: u64,
-    experiment_id: FfiStr,
-) -> *mut c_char {
+pub extern "C" fn glean_experiment_test_get_data(experiment_id: FfiStr) -> *mut c_char {
     with_glean(|glean| {
         let experiment_id = experiment_id.to_string_fallible()?;
         Ok(glean.test_get_experiment_data_as_json(experiment_id))
@@ -307,12 +299,12 @@ pub extern "C" fn glean_experiment_test_get_data(
 }
 
 #[no_mangle]
-pub extern "C" fn glean_test_clear_all_stores(glean_handle: u64) {
+pub extern "C" fn glean_test_clear_all_stores() {
     with_glean_value(|glean| glean.test_clear_all_stores())
 }
 
 #[no_mangle]
-pub extern "C" fn glean_destroy_glean(glean_handle: u64) {
+pub extern "C" fn glean_destroy_glean() {
     // intentionally left empty
     // currently used by the FFI in test mode
 }

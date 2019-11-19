@@ -182,7 +182,7 @@ open class GleanInternalAPI internal constructor () {
         // Deal with any pending events so we can start recording new ones
         @Suppress("EXPERIMENTAL_API_USAGE")
         Dispatchers.API.executeTask {
-            val pingSent = LibGleanFFI.INSTANCE.glean_on_ready_to_send_pings(this@GleanInternalAPI.handle).toBoolean()
+            val pingSent = LibGleanFFI.INSTANCE.glean_on_ready_to_send_pings().toBoolean()
             if (pingSent) {
                 PingUploadWorker.enqueueWorker(applicationContext)
             }
@@ -256,7 +256,7 @@ open class GleanInternalAPI internal constructor () {
                 // therefore need to obtain the lock from the PingUploader so that
                 // iterating over and deleting the pings doesn't happen at the same time.
                 synchronized(PingUploadWorker.pingQueueLock) {
-                    LibGleanFFI.INSTANCE.glean_set_upload_enabled(handle, enabled.toByte())
+                    LibGleanFFI.INSTANCE.glean_set_upload_enabled(enabled.toByte())
 
                     // Cancel any pending workers here so that we don't accidentally upload or
                     // collect data after the upload has been disabled.
@@ -282,7 +282,7 @@ open class GleanInternalAPI internal constructor () {
      */
     fun getUploadEnabled(): Boolean {
         if (isInitialized()) {
-            return LibGleanFFI.INSTANCE.glean_is_upload_enabled(handle).toBoolean()
+            return LibGleanFFI.INSTANCE.glean_is_upload_enabled().toBoolean()
         } else {
             return uploadEnabled
         }
@@ -324,7 +324,6 @@ open class GleanInternalAPI internal constructor () {
         @Suppress("EXPERIMENTAL_API_USAGE")
         Dispatchers.API.launch {
             LibGleanFFI.INSTANCE.glean_set_experiment_active(
-                handle,
                 experimentId,
                 branch,
                 keys,
@@ -344,7 +343,7 @@ open class GleanInternalAPI internal constructor () {
         // initialized, it doesn't get ignored and will be replayed after init.
         @Suppress("EXPERIMENTAL_API_USAGE")
         Dispatchers.API.launch {
-            LibGleanFFI.INSTANCE.glean_set_experiment_inactive(handle, experimentId)
+            LibGleanFFI.INSTANCE.glean_set_experiment_inactive(experimentId)
         }
     }
 
@@ -359,7 +358,7 @@ open class GleanInternalAPI internal constructor () {
         @Suppress("EXPERIMENTAL_API_USAGE")
         Dispatchers.API.assertInTestingMode()
 
-        return LibGleanFFI.INSTANCE.glean_experiment_test_is_active(handle, experimentId).toBoolean()
+        return LibGleanFFI.INSTANCE.glean_experiment_test_is_active(experimentId).toBoolean()
     }
 
     /**
@@ -390,7 +389,6 @@ open class GleanInternalAPI internal constructor () {
         Dispatchers.API.assertInTestingMode()
 
         val ptr = LibGleanFFI.INSTANCE.glean_experiment_test_get_data(
-            handle,
             experimentId
         )!!
 
@@ -464,7 +462,7 @@ open class GleanInternalAPI internal constructor () {
      */
     @VisibleForTesting(otherwise = VisibleForTesting.NONE)
     internal fun testCollect(ping: PingType): String? {
-        return LibGleanFFI.INSTANCE.glean_ping_collect(handle, ping.handle)?.getAndConsumeRustString()
+        return LibGleanFFI.INSTANCE.glean_ping_collect(ping.handle)?.getAndConsumeRustString()
     }
 
     /**
@@ -531,7 +529,6 @@ open class GleanInternalAPI internal constructor () {
         val pingArray = StringArray(pingNames.toTypedArray(), "utf-8")
         val pingArrayLen = pingNames.size
         val sentPing = LibGleanFFI.INSTANCE.glean_send_pings_by_name(
-            handle,
             pingArray,
             pingArrayLen
         ).toBoolean()
@@ -572,7 +569,7 @@ open class GleanInternalAPI internal constructor () {
 
         if (isInitialized() && clearStores) {
             // Clear all the stored data.
-            LibGleanFFI.INSTANCE.glean_test_clear_all_stores(handle)
+            LibGleanFFI.INSTANCE.glean_test_clear_all_stores()
         }
 
         isMainProcess = null
@@ -613,7 +610,6 @@ open class GleanInternalAPI internal constructor () {
             return
         }
 
-        LibGleanFFI.INSTANCE.glean_destroy_glean(handle)
         handle = 0L
     }
 
@@ -624,7 +620,6 @@ open class GleanInternalAPI internal constructor () {
     internal fun registerPingType(pingType: PingType) {
         if (this.isInitialized()) {
             LibGleanFFI.INSTANCE.glean_register_ping_type(
-                handle,
                 pingType.handle
             )
         }
@@ -644,7 +639,7 @@ open class GleanInternalAPI internal constructor () {
      */
     @VisibleForTesting(otherwise = VisibleForTesting.NONE)
     internal fun testHasPingType(pingName: String): Boolean {
-        return LibGleanFFI.INSTANCE.glean_test_has_ping_type(handle, pingName).toBoolean()
+        return LibGleanFFI.INSTANCE.glean_test_has_ping_type(pingName).toBoolean()
     }
 
     /**
