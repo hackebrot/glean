@@ -90,7 +90,7 @@ macro_rules! impl_labeled_metric {
             error_type: i32,
             storage_name: FfiStr,
         ) -> i32 {
-            crate::HandleMapExtension::call_infallible(&*crate::GLEAN, glean_handle, |glean| {
+            crate::with_glean_value(|glean| {
                 crate::HandleMapExtension::call_infallible(&*$global, metric_id, |metric| {
                     let error_type = std::convert::TryFrom::try_from(error_type).unwrap();
                     let storage_name =

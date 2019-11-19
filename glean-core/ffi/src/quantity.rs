@@ -4,7 +4,7 @@
 
 use ffi_support::FfiStr;
 
-use crate::{define_metric, handlemap_ext::HandleMapExtension, GLEAN};
+use crate::{define_metric, handlemap_ext::HandleMapExtension, with_glean_value};
 
 define_metric!(QuantityMetric => QUANTITY_METRICS {
     new           -> glean_new_quantity_metric(),
@@ -20,7 +20,7 @@ pub extern "C" fn glean_quantity_test_has_value(
     metric_id: u64,
     storage_name: FfiStr,
 ) -> u8 {
-    GLEAN.call_infallible(glean_handle, |glean| {
+    with_glean_value(|glean| {
         QUANTITY_METRICS.call_infallible(metric_id, |metric| {
             metric
                 .test_get_value(glean, storage_name.as_str())
@@ -35,7 +35,7 @@ pub extern "C" fn glean_quantity_test_get_value(
     metric_id: u64,
     storage_name: FfiStr,
 ) -> i64 {
-    GLEAN.call_infallible(glean_handle, |glean| {
+    with_glean_value(|glean| {
         QUANTITY_METRICS.call_infallible(metric_id, |metric| {
             metric.test_get_value(glean, storage_name.as_str()).unwrap()
         })

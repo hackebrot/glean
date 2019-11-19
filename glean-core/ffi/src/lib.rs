@@ -4,9 +4,9 @@
 
 use std::convert::TryFrom;
 use std::os::raw::c_char;
+use std::panic::UnwindSafe;
 
-use ffi_support::{define_string_destructor, ConcurrentHandleMap, FfiStr};
-use lazy_static::lazy_static;
+use ffi_support::{define_string_destructor, ConcurrentHandleMap, FfiStr, IntoFfi};
 
 use glean_core::Glean;
 
@@ -35,8 +35,48 @@ use from_raw::*;
 use handlemap_ext::HandleMapExtension;
 use ping_type::PING_TYPES;
 
-lazy_static! {
-    static ref GLEAN: ConcurrentHandleMap<Glean> = ConcurrentHandleMap::new();
+pub(crate) fn with_glean<R, F>(callback: F) -> R::Value
+where
+    F: UnwindSafe + FnOnce(&Glean) -> Result<R, glean_core::Error>,
+    R: IntoFfi,
+{
+    let mut error = ffi_support::ExternError::success();
+    let res = ffi_support::abort_on_panic::call_with_result(&mut error, || {
+        let glean = glean_core::global_glean().lock().unwrap();
+        callback(&glean)
+    });
+    handlemap_ext::log_if_error(error);
+    res
+}
+
+pub(crate) fn with_glean_mut<R, F>(callback: F) -> R::Value
+where
+    F: UnwindSafe + FnOnce(&mut Glean) -> Result<R, glean_core::Error>,
+    R: IntoFfi,
+{
+    let mut error = ffi_support::ExternError::success();
+    let res = ffi_support::abort_on_panic::call_with_result(&mut error, || {
+        let mut glean = glean_core::global_glean().lock().unwrap();
+        callback(&mut glean)
+    });
+    handlemap_ext::log_if_error(error);
+    res
+}
+
+pub(crate) fn with_glean_value<R, F>(callback: F) -> R::Value
+where
+    F: UnwindSafe + FnOnce(&Glean) -> R,
+    R: IntoFfi,
+{
+    with_glean(|glean| Ok(callback(glean)))
+}
+
+pub(crate) fn with_glean_value_mut<R, F>(callback: F) -> R::Value
+where
+    F: UnwindSafe + FnOnce(&mut Glean) -> R,
+    R: IntoFfi,
+{
+    with_glean_mut(|glean| Ok(callback(glean)))
 }
 
 /// Initialize the logging system based on the target platform. This ensures
@@ -129,15 +169,16 @@ impl TryFrom<&FfiConfiguration<'_>> for glean_core::Configuration {
 pub unsafe extern "C" fn glean_initialize(cfg: *const FfiConfiguration) -> u64 {
     assert!(!cfg.is_null());
 
-    GLEAN.insert_with_log(|| {
+    handlemap_ext::handle_result(|| {
         // We can create a reference to the FfiConfiguration struct:
         // 1. We did a null check
         // 2. We're not holding on to it beyond this function
         //    and we copy out all data when needed.
         let glean_cfg = glean_core::Configuration::try_from(&*cfg)?;
         let glean = Glean::new(glean_cfg)?;
+        glean_core::setup_glean(glean)?;
         log::info!("Glean initialized");
-        Ok(glean)
+        Ok(1u64)
     })
 }
 
@@ -153,7 +194,7 @@ pub unsafe extern "C" fn glean_initialize_migration(
 ) -> u64 {
     assert!(!cfg.is_null());
 
-    GLEAN.insert_with_log(|| {
+    handlemap_ext::handle_result(|| {
         // We can create a reference to the FfiConfiguration struct:
         // 1. We did a null check
         // 2. We're not holding on to it beyond this function
@@ -168,25 +209,26 @@ pub unsafe extern "C" fn glean_initialize_migration(
         } else {
             Glean::new(glean_cfg)
         }?;
+        glean_core::setup_glean(glean)?;
 
-        log::info!("Glean initialized");
-        Ok(glean)
+        log::info!("Glean initialized (with migration)");
+        Ok(1u64)
     })
 }
 
 #[no_mangle]
 pub extern "C" fn glean_on_ready_to_send_pings(glean_handle: u64) -> u8 {
-    GLEAN.call_infallible(glean_handle, |glean| glean.on_ready_to_send_pings())
+    with_glean_value(|glean| glean.on_ready_to_send_pings())
 }
 
 #[no_mangle]
 pub extern "C" fn glean_is_upload_enabled(glean_handle: u64) -> u8 {
-    GLEAN.call_infallible(glean_handle, |glean| glean.is_upload_enabled())
+    with_glean_value(|glean| glean.is_upload_enabled())
 }
 
 #[no_mangle]
 pub extern "C" fn glean_set_upload_enabled(glean_handle: u64, flag: u8) {
-    GLEAN.call_infallible_mut(glean_handle, |glean| glean.set_upload_enabled(flag != 0));
+    with_glean_value_mut(|glean| glean.set_upload_enabled(flag != 0));
     // The return value of set_upload_enabled is an implementation detail
     // that isn't exposed over FFI.
 }
@@ -197,20 +239,19 @@ pub extern "C" fn glean_send_pings_by_name(
     ping_names: RawStringArray,
     ping_names_len: i32,
 ) -> u8 {
-    GLEAN.call_with_log(glean_handle, |glean| {
+    with_glean(|glean| {
         let pings = from_raw_string_array(ping_names, ping_names_len)?;
-
         Ok(glean.send_pings_by_name(&pings))
     })
 }
 
 #[no_mangle]
 pub extern "C" fn glean_ping_collect(glean_handle: u64, ping_type_handle: u64) -> *mut c_char {
-    GLEAN.call_infallible(glean_handle, |glean| {
+    with_glean_value(|glean| {
         PING_TYPES.call_infallible(ping_type_handle, |ping_type| {
             let ping_maker = glean_core::ping::PingMaker::new();
             let data = ping_maker
-                .collect_string(glean, ping_type)
+                .collect_string(&glean, ping_type)
                 .unwrap_or_else(|| String::from(""));
             log::info!("Ping({}): {}", ping_type.name.as_str(), data);
             data
@@ -227,7 +268,7 @@ pub extern "C" fn glean_set_experiment_active(
     extra_values: RawStringArray,
     extra_len: i32,
 ) {
-    GLEAN.call_with_log(glean_handle, |glean| {
+    with_glean(|glean| {
         let experiment_id = experiment_id.to_string_fallible()?;
         let branch = branch.to_string_fallible()?;
         let extra = from_raw_string_array_and_string_array(extra_keys, extra_values, extra_len)?;
@@ -239,7 +280,7 @@ pub extern "C" fn glean_set_experiment_active(
 
 #[no_mangle]
 pub extern "C" fn glean_set_experiment_inactive(glean_handle: u64, experiment_id: FfiStr) {
-    GLEAN.call_with_log(glean_handle, |glean| {
+    with_glean(|glean| {
         let experiment_id = experiment_id.to_string_fallible()?;
         glean.set_experiment_inactive(experiment_id);
         Ok(())
@@ -248,7 +289,7 @@ pub extern "C" fn glean_set_experiment_inactive(glean_handle: u64, experiment_id
 
 #[no_mangle]
 pub extern "C" fn glean_experiment_test_is_active(glean_handle: u64, experiment_id: FfiStr) -> u8 {
-    GLEAN.call_with_log(glean_handle, |glean| {
+    with_glean(|glean| {
         let experiment_id = experiment_id.to_string_fallible()?;
         Ok(glean.test_is_experiment_active(experiment_id))
     })
@@ -259,7 +300,7 @@ pub extern "C" fn glean_experiment_test_get_data(
     glean_handle: u64,
     experiment_id: FfiStr,
 ) -> *mut c_char {
-    GLEAN.call_with_log(glean_handle, |glean| {
+    with_glean(|glean| {
         let experiment_id = experiment_id.to_string_fallible()?;
         Ok(glean.test_get_experiment_data_as_json(experiment_id))
     })
@@ -267,8 +308,13 @@ pub extern "C" fn glean_experiment_test_get_data(
 
 #[no_mangle]
 pub extern "C" fn glean_test_clear_all_stores(glean_handle: u64) {
-    GLEAN.call_infallible(glean_handle, |glean| glean.test_clear_all_stores());
+    with_glean_value(|glean| glean.test_clear_all_stores())
 }
 
-define_infallible_handle_map_deleter!(GLEAN, glean_destroy_glean);
+#[no_mangle]
+pub extern "C" fn glean_destroy_glean(glean_handle: u64) {
+    // intentionally left empty
+    // currently used by the FFI in test mode
+}
+
 define_string_destructor!(glean_str_free);

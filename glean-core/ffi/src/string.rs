@@ -6,9 +6,7 @@ use std::os::raw::c_char;
 
 use ffi_support::FfiStr;
 
-use crate::{
-    define_metric, ffi_string_ext::FallibleToString, handlemap_ext::HandleMapExtension, GLEAN,
-};
+use crate::{define_metric, ffi_string_ext::FallibleToString, handlemap_ext::HandleMapExtension};
 
 define_metric!(StringMetric => STRING_METRICS {
     new           -> glean_new_string_metric(),
@@ -18,12 +16,11 @@ define_metric!(StringMetric => STRING_METRICS {
 
 #[no_mangle]
 pub extern "C" fn glean_string_set(glean_handle: u64, metric_id: u64, value: FfiStr) {
-    GLEAN.call_infallible(glean_handle, |glean| {
-        STRING_METRICS.call_with_log(metric_id, |metric| {
-            let value = value.to_string_fallible()?;
-            metric.set(glean, value);
-            Ok(())
-        })
+    let glean = glean_core::global_glean().lock().unwrap();
+    STRING_METRICS.call_with_log(metric_id, |metric| {
+        let value = value.to_string_fallible()?;
+        metric.set(&glean, value);
+        Ok(())
     })
 }
 
@@ -33,12 +30,11 @@ pub extern "C" fn glean_string_test_has_value(
     metric_id: u64,
     storage_name: FfiStr,
 ) -> u8 {
-    GLEAN.call_infallible(glean_handle, |glean| {
-        STRING_METRICS.call_infallible(metric_id, |metric| {
-            metric
-                .test_get_value(glean, storage_name.as_str())
-                .is_some()
-        })
+    let glean = glean_core::global_glean().lock().unwrap();
+    STRING_METRICS.call_infallible(metric_id, |metric| {
+        metric
+            .test_get_value(&glean, storage_name.as_str())
+            .is_some()
     })
 }
 
@@ -48,9 +44,10 @@ pub extern "C" fn glean_string_test_get_value(
     metric_id: u64,
     storage_name: FfiStr,
 ) -> *mut c_char {
-    GLEAN.call_infallible(glean_handle, |glean| {
-        STRING_METRICS.call_infallible(metric_id, |metric| {
-            metric.test_get_value(glean, storage_name.as_str()).unwrap()
-        })
+    let glean = glean_core::global_glean().lock().unwrap();
+    STRING_METRICS.call_infallible(metric_id, |metric| {
+        metric
+            .test_get_value(&glean, storage_name.as_str())
+            .unwrap()
     })
 }
