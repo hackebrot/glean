@@ -77,6 +77,8 @@ internal interface LibGleanFFI : Library {
 
     fun glean_test_clear_all_stores()
 
+    fun glean_destroy_glean()
+
     fun glean_on_ready_to_send_pings(): Byte
 
     fun glean_enable_logging()
