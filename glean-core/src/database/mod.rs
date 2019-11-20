@@ -15,13 +15,25 @@ use crate::Glean;
 use crate::Lifetime;
 use crate::Result;
 
-#[derive(Debug)]
 pub struct Database {
     rkv: Rkv,
+    user_store: SingleStore,
+    ping_store: SingleStore,
     // Metrics with 'application' lifetime only live as long
     // as the application lives: they don't need to be persisted
     // to disk using rkv. Store them in a map.
     app_lifetime_data: RwLock<BTreeMap<String, Metric>>,
+}
+
+impl std::fmt::Debug for Database {
+    fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
+        fmt.debug_struct("Database")
+            .field("rkv", &self.rkv)
+            .field("user_store", &"SingleStore")
+            .field("ping_store", &"SingleStore")
+            .field("app_lifetime_data", &self.app_lifetime_data)
+            .finish()
+    }
 }
 
 impl Database {
@@ -30,10 +42,25 @@ impl Database {
     /// This opens the underlying rkv store and creates
     /// the underlying directory structure.
     pub fn new(data_path: &str) -> Result<Self> {
+        let rkv = Self::open_rkv(data_path)?;
+        let user_store = rkv.open_single(Lifetime::User.as_str(), StoreOptions::create())?;
+        let ping_store = rkv.open_single(Lifetime::Ping.as_str(), StoreOptions::create())?;
+        let app_lifetime_data = RwLock::new(BTreeMap::new());
+
         Ok(Self {
-            rkv: Self::open_rkv(data_path)?,
-            app_lifetime_data: RwLock::new(BTreeMap::new()),
+            rkv,
+            user_store,
+            ping_store,
+            app_lifetime_data,
         })
+    }
+
+    fn get_store(&self, lifetime: Lifetime) -> &SingleStore {
+        match lifetime {
+            Lifetime::User => &self.user_store,
+            Lifetime::Ping => &self.ping_store,
+            Lifetime::Application => panic!("No store for application data"),
+        }
     }
 
     /// Creates the storage directories and inits rkv.
@@ -117,14 +144,11 @@ impl Database {
             return;
         }
 
-        let store: SingleStore = unwrap_or!(
-            self.rkv
-                .open_single(lifetime.as_str(), StoreOptions::create()),
+        let reader = unwrap_or!(self.rkv.read(), return);
+        let mut iter = unwrap_or!(
+            self.get_store(lifetime).iter_from(&reader, &iter_start),
             return
         );
-
-        let reader = unwrap_or!(self.rkv.read(), return);
-        let mut iter = unwrap_or!(store.iter_from(&reader, &iter_start), return);
 
         while let Some(Ok((metric_name, value))) = iter.next() {
             if !metric_name.starts_with(iter_start.as_bytes()) {
@@ -170,13 +194,11 @@ impl Database {
                 .unwrap_or(false);
         }
 
-        let store: SingleStore = unwrap_or!(
-            self.rkv
-                .open_single(lifetime.as_str(), StoreOptions::create()),
-            return false
-        );
         let reader = unwrap_or!(self.rkv.read(), return false);
-        store.get(&reader, &key).unwrap_or(None).is_some()
+        self.get_store(lifetime)
+            .get(&reader, &key)
+            .unwrap_or(None)
+            .is_some()
     }
 
     /// Write to the specified storage with the provided transaction function.
@@ -189,18 +211,15 @@ impl Database {
     /// * This function will **not** panic on database errors.
     pub fn write_with_store<F>(&self, store_name: Lifetime, mut transaction_fn: F) -> Result<()>
     where
-        F: FnMut(rkv::Writer, SingleStore) -> Result<()>,
+        F: FnMut(rkv::Writer, &SingleStore) -> Result<()>,
     {
         if store_name == Lifetime::Application {
             panic!("Can't write with store for application-lifetime data");
         }
 
-        let store: SingleStore = self
-            .rkv
-            .open_single(store_name.as_str(), StoreOptions::create())?;
-        let writer = self.rkv.write()?;
-        transaction_fn(writer, store)?;
-        Ok(())
+        let writer = self.rkv.write().unwrap();
+        let store = self.get_store(store_name);
+        transaction_fn(writer, store)
     }
 
     /// Records a metric in the underlying storage system.
@@ -246,11 +265,9 @@ impl Database {
         let encoded = bincode::serialize(&metric).expect("IMPOSSIBLE: Serializing metric failed");
         let value = rkv::Value::Blob(&encoded);
 
-        let store_name = lifetime.as_str();
-        let store = self.rkv.open_single(store_name, StoreOptions::create())?;
-
         let mut writer = self.rkv.write()?;
-        store.put(&mut writer, final_key, &value)?;
+        self.get_store(lifetime)
+            .put(&mut writer, final_key, &value)?;
         writer.commit()?;
         Ok(())
     }
@@ -313,10 +330,8 @@ impl Database {
             return Ok(());
         }
 
-        let store_name = lifetime.as_str();
-        let store = self.rkv.open_single(store_name, StoreOptions::create())?;
-
         let mut writer = self.rkv.write()?;
+        let store = self.get_store(lifetime);
         let new_value: Metric = {
             let old_value = store.get(&writer, &final_key)?;
 
