@@ -23,7 +23,7 @@ public class Glean {
     /// ```
     public static let shared = Glean()
 
-    var handle: UInt64 = 0
+    var initialized: Bool = false
     private var uploadEnabled: Bool = true
     private var configuration: Configuration?
     private var observer: GleanLifecycleObserver?
@@ -45,7 +45,7 @@ public class Glean {
     }
 
     deinit {
-        self.handle = 0
+        self.initialized = false
     }
 
     /// Initialize the Glean SDK.
@@ -70,7 +70,7 @@ public class Glean {
 
         self.configuration = configuration
 
-        self.handle = withFfiConfiguration(
+        self.initialized = withFfiConfiguration(
             // The FileManager returns `file://` URLS with absolute paths.
             // The Rust side expects normal path strings to be used.
             // `relativePath` for a file URL gives us the absolute filesystem path.
@@ -80,10 +80,10 @@ public class Glean {
             configuration: configuration
         ) { cfg in
             var cfg = cfg
-            return glean_initialize(&cfg)
+            return glean_initialize(&cfg).toBool()
         }
 
-        if handle == 0 {
+        if !self.initialized {
             return
         }
 
@@ -100,7 +100,7 @@ public class Glean {
 
         // Deal with any pending events so we can start recording new ones
         Dispatchers.shared.serialOperationQueue.addOperation {
-            if glean_on_ready_to_send_pings(self.handle) != 0 {
+            if glean_on_ready_to_send_pings() != 0 {
                 Dispatchers.shared.launchConcurrent {
                     HttpPingUploader(configuration: configuration).process()
                 }
@@ -158,7 +158,7 @@ public class Glean {
                 // at which point it will pick up scheduled pings before the setting was toggled.
                 // Or it is scheduled afterwards and will not schedule or find any left-over pings to send.
 
-                glean_set_upload_enabled(self.handle, enabled.toByte())
+                glean_set_upload_enabled(enabled.toByte())
 
                 if !enabled {
                     Dispatchers.shared.cancelBackgroundTasks()
@@ -178,7 +178,7 @@ public class Glean {
     /// Get whether or not Glean is allowed to record and upload data.
     public func getUploadEnabled() -> Bool {
         if isInitialized() {
-            return glean_is_upload_enabled(handle) != 0
+            return glean_is_upload_enabled() != 0
         } else {
             return uploadEnabled
         }
@@ -186,7 +186,7 @@ public class Glean {
 
     /// Returns true if the Glean SDK has been initialized.
     func isInitialized() -> Bool {
-        return handle != 0
+        return self.initialized
     }
 
     /// Handle background event and send appropriate pings
@@ -222,7 +222,6 @@ public class Glean {
 
             withArrayOfCStrings(pingNames) { pingNames in
                 let sentPing = glean_send_pings_by_name(
-                    self.handle,
                     pingNames,
                     Int32(pingNames?.count ?? 0)
                 )
@@ -259,7 +258,7 @@ public class Glean {
         if !self.isInitialized() {
             self.pingTypeQueue.append(pingType)
         } else {
-            glean_register_ping_type(self.handle, pingType.handle)
+            glean_register_ping_type(pingType.handle)
         }
     }
 
@@ -267,18 +266,18 @@ public class Glean {
     ///
     /// Returns true if a ping by this name is in the ping registry.
     func testHasPingType(_ pingName: String) -> Bool {
-        return glean_test_has_ping_type(self.handle, pingName) != 0
+        return glean_test_has_ping_type(pingName) != 0
     }
 
     /// Test-only method to destroy the owned glean-core handle.
     func testDestroyGleanHandle() {
         if !isInitialized() {
-            // We don't need to destroy the Glean handle: it wasn't initialized.
+            // We don't need to destroy Glean: it wasn't initialized.
             return
         }
 
-        glean_destroy_glean(handle)
-        handle = 0
+        glean_destroy_glean()
+        initialized = false
     }
 
     /// TEST ONLY FUNCTION.
@@ -303,7 +302,7 @@ public class Glean {
 
         if isInitialized() && clearStores {
             // Clear all the stored data.
-            glean_test_clear_all_stores(handle)
+            glean_test_clear_all_stores()
         }
 
         // Init Glean.
