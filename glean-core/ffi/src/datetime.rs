@@ -16,7 +16,6 @@ define_metric!(DatetimeMetric => DATETIME_METRICS {
 
 #[no_mangle]
 pub extern "C" fn glean_datetime_set(
-    glean_handle: u64,
     metric_id: u64,
     year: i32,
     month: u32,
@@ -55,11 +54,7 @@ pub extern "C" fn glean_datetime_set(
 }
 
 #[no_mangle]
-pub extern "C" fn glean_datetime_test_has_value(
-    glean_handle: u64,
-    metric_id: u64,
-    storage_name: FfiStr,
-) -> u8 {
+pub extern "C" fn glean_datetime_test_has_value(metric_id: u64, storage_name: FfiStr) -> u8 {
     with_glean_value(|glean| {
         DATETIME_METRICS.call_infallible(metric_id, |metric| {
             metric
@@ -71,7 +66,6 @@ pub extern "C" fn glean_datetime_test_has_value(
 
 #[no_mangle]
 pub extern "C" fn glean_datetime_test_get_value_as_string(
-    glean_handle: u64,
     metric_id: u64,
     storage_name: FfiStr,
 ) -> *mut c_char {

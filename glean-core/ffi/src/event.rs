@@ -56,7 +56,6 @@ pub extern "C" fn glean_new_event_metric(
 
 #[no_mangle]
 pub extern "C" fn glean_event_record(
-    glean_handle: u64,
     metric_id: u64,
     timestamp: u64,
     extra_keys: RawIntArray,
@@ -73,11 +72,7 @@ pub extern "C" fn glean_event_record(
 }
 
 #[no_mangle]
-pub extern "C" fn glean_event_test_has_value(
-    glean_handle: u64,
-    metric_id: u64,
-    storage_name: FfiStr,
-) -> u8 {
+pub extern "C" fn glean_event_test_has_value(metric_id: u64, storage_name: FfiStr) -> u8 {
     with_glean_value(|glean| {
         EVENT_METRICS.call_infallible(metric_id, |metric| {
             metric.test_has_value(glean, storage_name.as_str())
@@ -87,7 +82,6 @@ pub extern "C" fn glean_event_test_has_value(
 
 #[no_mangle]
 pub extern "C" fn glean_event_test_get_value_as_json_string(
-    glean_handle: u64,
     metric_id: u64,
     storage_name: FfiStr,
 ) -> *mut c_char {

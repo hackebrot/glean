@@ -15,11 +15,7 @@ define_metric!(CounterMetric => COUNTER_METRICS {
 });
 
 #[no_mangle]
-pub extern "C" fn glean_counter_test_has_value(
-    glean_handle: u64,
-    metric_id: u64,
-    storage_name: FfiStr,
-) -> u8 {
+pub extern "C" fn glean_counter_test_has_value(metric_id: u64, storage_name: FfiStr) -> u8 {
     let glean = glean_core::global_glean().lock().unwrap();
     COUNTER_METRICS.call_infallible(metric_id, |metric| {
         metric
@@ -29,11 +25,7 @@ pub extern "C" fn glean_counter_test_has_value(
 }
 
 #[no_mangle]
-pub extern "C" fn glean_counter_test_get_value(
-    glean_handle: u64,
-    metric_id: u64,
-    storage_name: FfiStr,
-) -> i32 {
+pub extern "C" fn glean_counter_test_get_value(metric_id: u64, storage_name: FfiStr) -> i32 {
     let glean = glean_core::global_glean().lock().unwrap();
     COUNTER_METRICS.call_infallible(metric_id, |metric| {
         metric

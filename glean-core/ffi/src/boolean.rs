@@ -12,7 +12,7 @@ define_metric!(BooleanMetric => BOOLEAN_METRICS {
 });
 
 #[no_mangle]
-pub extern "C" fn glean_boolean_set(glean_handle: u64, metric_id: u64, value: u8) {
+pub extern "C" fn glean_boolean_set(metric_id: u64, value: u8) {
     with_glean_value(|glean| {
         BOOLEAN_METRICS.call_infallible(metric_id, |metric| {
             metric.set(glean, value != 0);
@@ -21,11 +21,7 @@ pub extern "C" fn glean_boolean_set(glean_handle: u64, metric_id: u64, value: u8
 }
 
 #[no_mangle]
-pub extern "C" fn glean_boolean_test_has_value(
-    glean_handle: u64,
-    metric_id: u64,
-    storage_name: FfiStr,
-) -> u8 {
+pub extern "C" fn glean_boolean_test_has_value(metric_id: u64, storage_name: FfiStr) -> u8 {
     with_glean_value(|glean| {
         BOOLEAN_METRICS.call_infallible(metric_id, |metric| {
             metric
@@ -36,11 +32,7 @@ pub extern "C" fn glean_boolean_test_has_value(
 }
 
 #[no_mangle]
-pub extern "C" fn glean_boolean_test_get_value(
-    glean_handle: u64,
-    metric_id: u64,
-    storage_name: FfiStr,
-) -> u8 {
+pub extern "C" fn glean_boolean_test_get_value(metric_id: u64, storage_name: FfiStr) -> u8 {
     with_glean_value(|glean| {
         BOOLEAN_METRICS.call_infallible(metric_id, |metric| {
             metric.test_get_value(glean, storage_name.as_str()).unwrap()

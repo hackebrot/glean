@@ -19,7 +19,6 @@ define_metric!(CustomDistributionMetric => CUSTOM_DISTRIBUTION_METRICS {
 
 #[no_mangle]
 pub extern "C" fn glean_custom_distribution_accumulate_samples(
-    glean_handle: u64,
     metric_id: u64,
     raw_samples: RawInt64Array,
     num_samples: i32,
@@ -39,7 +38,6 @@ pub extern "C" fn glean_custom_distribution_accumulate_samples(
 
 #[no_mangle]
 pub extern "C" fn glean_custom_distribution_test_has_value(
-    glean_handle: u64,
     metric_id: u64,
     storage_name: FfiStr,
 ) -> u8 {
@@ -54,7 +52,6 @@ pub extern "C" fn glean_custom_distribution_test_has_value(
 
 #[no_mangle]
 pub extern "C" fn glean_custom_distribution_test_get_value_as_json_string(
-    glean_handle: u64,
     metric_id: u64,
     storage_name: FfiStr,
 ) -> *mut c_char {

@@ -15,7 +15,7 @@ define_metric!(TimespanMetric => TIMESPAN_METRICS {
 });
 
 #[no_mangle]
-pub extern "C" fn glean_timespan_set_start(glean_handle: u64, metric_id: u64, start_time: u64) {
+pub extern "C" fn glean_timespan_set_start(metric_id: u64, start_time: u64) {
     with_glean_value(|glean| {
         TIMESPAN_METRICS.call_infallible_mut(metric_id, |metric| {
             metric.set_start(glean, start_time);
@@ -24,7 +24,7 @@ pub extern "C" fn glean_timespan_set_start(glean_handle: u64, metric_id: u64, st
 }
 
 #[no_mangle]
-pub extern "C" fn glean_timespan_set_stop(glean_handle: u64, metric_id: u64, stop_time: u64) {
+pub extern "C" fn glean_timespan_set_stop(metric_id: u64, stop_time: u64) {
     with_glean_value(|glean| {
         TIMESPAN_METRICS.call_infallible_mut(metric_id, |metric| {
             metric.set_stop(glean, stop_time);
@@ -40,11 +40,7 @@ pub extern "C" fn glean_timespan_cancel(metric_id: u64) {
 }
 
 #[no_mangle]
-pub extern "C" fn glean_timespan_set_raw_nanos(
-    glean_handle: u64,
-    metric_id: u64,
-    elapsed_nanos: u64,
-) {
+pub extern "C" fn glean_timespan_set_raw_nanos(metric_id: u64, elapsed_nanos: u64) {
     let elapsed = Duration::from_nanos(elapsed_nanos);
     with_glean_value(|glean| {
         TIMESPAN_METRICS.call_infallible(metric_id, |metric| {
@@ -54,11 +50,7 @@ pub extern "C" fn glean_timespan_set_raw_nanos(
 }
 
 #[no_mangle]
-pub extern "C" fn glean_timespan_test_has_value(
-    glean_handle: u64,
-    metric_id: u64,
-    storage_name: FfiStr,
-) -> u8 {
+pub extern "C" fn glean_timespan_test_has_value(metric_id: u64, storage_name: FfiStr) -> u8 {
     with_glean_value(|glean| {
         TIMESPAN_METRICS.call_infallible(metric_id, |metric| {
             metric
@@ -69,11 +61,7 @@ pub extern "C" fn glean_timespan_test_has_value(
 }
 
 #[no_mangle]
-pub extern "C" fn glean_timespan_test_get_value(
-    glean_handle: u64,
-    metric_id: u64,
-    storage_name: FfiStr,
-) -> u64 {
+pub extern "C" fn glean_timespan_test_get_value(metric_id: u64, storage_name: FfiStr) -> u64 {
     with_glean_value(|glean| {
         TIMESPAN_METRICS.call_infallible(metric_id, |metric| {
             metric.test_get_value(glean, storage_name.as_str()).unwrap()

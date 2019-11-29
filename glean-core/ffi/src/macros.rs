@@ -84,7 +84,7 @@ macro_rules! define_metric {
         $(
         #[no_mangle]
         pub extern "C" fn $test_get_num_recorded_errors_fn(
-            glean_handle: u64,
+
             metric_id: u64,
             error_type: i32,
             storage_name: FfiStr
@@ -105,7 +105,7 @@ macro_rules! define_metric {
 
         $(
             #[no_mangle]
-            pub extern "C" fn $op_fn(glean_handle: u64, metric_id: u64, $($op_argname: $op_argtyp),*) {
+            pub extern "C" fn $op_fn( metric_id: u64, $($op_argname: $op_argtyp),*) {
                 crate::with_glean_value(|glean| {
                     crate::HandleMapExtension::call_infallible(&*$metric_map, metric_id, |metric| {
                         metric.$op(&glean, $($op_argname),*);

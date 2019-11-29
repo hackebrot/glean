@@ -85,7 +85,6 @@ macro_rules! impl_labeled_metric {
 
         #[no_mangle]
         pub extern "C" fn $test_get_num_recorded_errors(
-            glean_handle: u64,
             metric_id: u64,
             error_type: i32,
             storage_name: FfiStr,

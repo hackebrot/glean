@@ -18,7 +18,7 @@ define_metric!(StringListMetric => STRING_LIST_METRICS {
 });
 
 #[no_mangle]
-pub extern "C" fn glean_string_list_add(glean_handle: u64, metric_id: u64, value: FfiStr) {
+pub extern "C" fn glean_string_list_add(metric_id: u64, value: FfiStr) {
     with_glean_value(|glean| {
         STRING_LIST_METRICS.call_with_log(metric_id, |metric| {
             let value = value.to_string_fallible()?;
@@ -29,12 +29,7 @@ pub extern "C" fn glean_string_list_add(glean_handle: u64, metric_id: u64, value
 }
 
 #[no_mangle]
-pub extern "C" fn glean_string_list_set(
-    glean_handle: u64,
-    metric_id: u64,
-    values: RawStringArray,
-    values_len: i32,
-) {
+pub extern "C" fn glean_string_list_set(metric_id: u64, values: RawStringArray, values_len: i32) {
     with_glean_value(|glean| {
         STRING_LIST_METRICS.call_with_log(metric_id, |metric| {
             let values = from_raw_string_array(values, values_len)?;
@@ -45,11 +40,7 @@ pub extern "C" fn glean_string_list_set(
 }
 
 #[no_mangle]
-pub extern "C" fn glean_string_list_test_has_value(
-    glean_handle: u64,
-    metric_id: u64,
-    storage_name: FfiStr,
-) -> u8 {
+pub extern "C" fn glean_string_list_test_has_value(metric_id: u64, storage_name: FfiStr) -> u8 {
     with_glean_value(|glean| {
         STRING_LIST_METRICS.call_infallible(metric_id, |metric| {
             metric
@@ -61,7 +52,6 @@ pub extern "C" fn glean_string_list_test_has_value(
 
 #[no_mangle]
 pub extern "C" fn glean_string_list_test_get_value_as_json_string(
-    glean_handle: u64,
     metric_id: u64,
     storage_name: FfiStr,
 ) -> *mut c_char {
